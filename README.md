@@ -1,4 +1,4 @@
-# Jenkins Demos
+# Jenkins Labs
 
 A collection of utility pipeline examplez for Jenkins or Azure Devops.
 
