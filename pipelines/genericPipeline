@@ -17,6 +17,7 @@ pipeline {
         stage('install Lint & Security Scan') {
             steps {
                 sh 'ls -l'
+                sh''
                 sh 'pip install flake8 bandit'
             }
         }
@@ -50,9 +51,12 @@ pipeline {
                     sh 'pwd'
                 }
                 sh 'ls -l'
-                // sh "docker build -t $DOCKER_REGISTRY/$REPO_NAME:$IMAGE_TAG ."
+                echo "Building Docker image"
+                echo "Inserting into: $DOCKER_REGISTRY/$REPO_NAME"
+                echo "Tag: latest-$IMAGE_TAG and latest"
                 sh "docker build -t $DOCKER_REGISTRY/$REPO_NAME:latest-$IMAGE_TAG exam-code/docker/be"
                 sh "docker tag $DOCKER_REGISTRY/$REPO_NAME:latest-$IMAGE_TAG $DOCKER_REGISTRY/$REPO_NAME:latest-$IMAGE_TAG"
+                sh "docker tag $DOCKER_REGISTRY/$REPO_NAME:latest-$IMAGE_TAG $DOCKER_REGISTRY/$REPO_NAME:latest"
             }
         }
         
