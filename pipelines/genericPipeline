@@ -51,15 +51,15 @@ pipeline {
                 }
                 sh 'ls -l'
                 // sh "docker build -t $DOCKER_REGISTRY/$REPO_NAME:$IMAGE_TAG ."
-                sh "docker build -t $DOCKER_REGISTRY/$REPO_NAME:$IMAGE_TAG exam-code/docker/be"
-                sh "docker tag $DOCKER_REGISTRY/$REPO_NAME:$IMAGE_TAG $DOCKER_REGISTRY/$REPO_NAME:latest"
+                sh "docker build -t $DOCKER_REGISTRY/$REPO_NAME:latest-$IMAGE_TAG exam-code/docker/be"
+                sh "docker tag $DOCKER_REGISTRY/$REPO_NAME:latest-$IMAGE_TAG $DOCKER_REGISTRY/$REPO_NAME:latest-$IMAGE_TAG"
             }
         }
         
         stage('Run Tests in Container') {
             steps {
                 sh 'docker images'
-                echo "docker run --rm $DOCKER_REGISTRY/$REPO_NAME:$IMAGE_TAG pytest tests/"
+                echo "docker run --rm $DOCKER_REGISTRY/$REPO_NAME:latest-$IMAGE_TAG pytest tests/"
             }
         }
 
