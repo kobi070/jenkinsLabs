@@ -1,121 +1,88 @@
 pipeline {
     agent any
-
     environment {
-        // Set the environment variables
-        FLASK_ENV = 'development'
-        PROJECT_HOME = "${WORKSPACE}"
-        GIT_BRANCH = 'jenkins-workshop'
-        GIT_URI = 'https://github.com/kobi070/devopshift-welcome.git'
+        DOCKERHUB_CREDENTIALS = credentials('docker-hub-creds')
+        DOCKER_REGISTRY = 'kobi070'
+        REPO_NAME = 'be-exam'  // Change to 'be-exam' for backend pipeline
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        // workshop/argo-jenkins-exam
     }
-
     stages {
-        // Stage 1 - Clone Git Project and print the URI and Branch
-        stage('Stage 1 - Clone Git Project') {
+        stage('Clone Repository') {
             steps {
-                script {
-                    sh '''#!/bin/bash
-                    echo "Git branch $GIT_BRANCH"
-                    echo "Git Uri $GIT_URI"
-                    echo "Cloning $GIT_BRANCH from $GIT_URI"
-                    '''
-                }
+                git branch: 'workshop/argo-jenkins-exam', url: 'https://github.com/kobi070/devopshift-welcome.git'
             }
         }
-        // Stage 2 - Setup Environment and Install Dependencies
-        stage('Stage 2 - Setup Environment and Install Dependencies') {
+        
+        stage('install Lint & Security Scan') {
             steps {
-                script {
-                    sh '''#!/bin/bash
-                    echo "Installing virtualenv"
-                    echo "pip install virtualenv"
-                    echo "Delete previous built venv and create a new one"
-                    echo "rm -rf $PROJECT_HOME"
-                    echo "virtualenv $PROJECT_HOME"
-                    echo "source $PROJECT_HOME/bin/activate"
-                    echo "Install required Python packages"
-                    echo "pip install -r req.txt"
-                    '''
-                }
+                sh 'ls -l'
+                sh 'pip install flake8 bandit'
             }
         }
 
-        stage('Stage 1.5 - Testing the App'){
-            steps{
+        stage('Parallel Lint & Security Scan') {
+            steps {
                 parallel(
                     Lint: {
-                        sh 'echo flake8 .'
+                        sh 'flake8 .'
                     },
                     Security: {
-                        sh 'echo bandit -r .'
-                    },
-                    UnitTests: {
-                        sh 'echo pytest'
-                    },
-                    IntegrationTests: {
-                        sh 'echo behave'
-                    },
-                    PerformanceTests: {
-                        sh 'echo locust'
-                    },
+                        sh 'bandit -r .'
+                    }
                 )
             }
         }
 
-        // Stage 3 - Run Flask Application
-        stage('Stage 3 - Run Flask Application') {
+        stage('Install Dependencies') {
             steps {
-                script {
-                    sh '''#!/bin/bash
-                    echo "source $PROJECT_HOME/bin/activate"
-                    echo "Gets tasks"
-                    echo "Starting Flask App on 0.0.0.0:5005"
-                    echo "nohup flask run --host=0.0.0.0 --port=5005 > flask_app.log &"
-                    '''
+                dir(path: 'exam-code/docker/be'){
+                    sh 'pwd'
                 }
+                sh 'pwd'
+                sh 'pip install -r exam-code/docker/be/requirements.txt'
             }
         }
-        // Stage 4 - Wait for User Approval
-        stage('Stage 4 - Wait for User Approval') {
+        
+        stage('Build Docker Image') {
             steps {
-                script {
-                    def userInput = input message: 'Is the App Running?',
-                                        parameters: [choice(name: 'Proceed', choices: ['Proceed', 'Abort'])]
-                    env.USER_CHOICE = userInput
-                }
+                sh 'ls -l'
+                // sh "docker build -t $DOCKER_REGISTRY/$REPO_NAME:$IMAGE_TAG ."
+                sh "docker build -t $DOCKER_REGISTRY/$REPO_NAME:$IMAGE_TAG exam-code/docker/be"
+                sh "docker tag $DOCKER_REGISTRY/$REPO_NAME:$IMAGE_TAG $DOCKER_REGISTRY/$REPO_NAME:latest"
             }
         }
-        // Stage 5 - Abort the Pipeline if the user choice was to abort
-        stage('Stage 5 - Abort the Pipeline') {
-            when {
-                expression { env.USER_CHOICE == 'Abort' }
-            }
+        
+        stage('Run Tests in Container') {
             steps {
-                script {
-                    error 'Pipeline aborted by the user ${env.BUILD_USER}'
-                }
+                echo "docker run --rm $DOCKER_REGISTRY/$REPO_NAME:$IMAGE_TAG pytest tests/"
             }
         }
-        // Stage 6 - Verify App
-        stage('Stage 6 - Verify App') {
-            steps {
-                script {
-                    echo "Flask App is Running!"
-                }
-            }
-        }
-    }
 
-    // Post section
-    post {
-        success {
-            echo 'Pipeline completed successfully ${env.BUILD_USER}'
+        
+        
+      stage('Integration Test with Docker Compose') {
+            steps {
+                dir('exam-code/docker') {
+                    sh 'curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose'
+                    sh 'chmod +x /usr/local/bin/docker-compose'
+                    sh 'docker-compose --version'
+                    sh 'cat docker-compose.yaml'
+                    sh 'docker-compose -f docker-compose.yaml up -d'
+                    sleep time: 10, unit: 'SECONDS'  // Wait for services to start
+                    sh 'docker ps -a  && echo "Port 5002 is mapped and the container is running." ' // Adjust port for backend if needed
+                    sh 'docker-compose -f docker-compose.yaml down'
+                }
+            }
         }
-        aborted {
-            echo 'Pipeline aborted by user ${env.BUILD_USER}'
-        }
-        always {
-            echo 'This will always run'
+
+        
+        stage('Push to Docker Hub') {
+            steps {
+                sh "$DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin"
+                sh "docker push $DOCKER_REGISTRY/$REPO_NAME:$IMAGE_TAG"
+                sh "docker push $DOCKER_REGISTRY/$REPO_NAME:latest"
+            }
         }
     }
 }
