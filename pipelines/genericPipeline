@@ -46,6 +46,9 @@ pipeline {
         
         stage('Build Docker Image') {
             steps {
+                dir(path: 'exam-code/docker/be'){
+                    sh 'pwd'
+                }
                 sh 'ls -l'
                 // sh "docker build -t $DOCKER_REGISTRY/$REPO_NAME:$IMAGE_TAG ."
                 sh "docker build -t $DOCKER_REGISTRY/$REPO_NAME:$IMAGE_TAG exam-code/docker/be"
@@ -55,6 +58,7 @@ pipeline {
         
         stage('Run Tests in Container') {
             steps {
+                sh 'docker images'
                 echo "docker run --rm $DOCKER_REGISTRY/$REPO_NAME:$IMAGE_TAG pytest tests/"
             }
         }
